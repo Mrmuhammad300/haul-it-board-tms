@@ -5,6 +5,7 @@ import { calculateDirectCost, type CostBuildup } from "./cost";
 import { calculatePricing, type PricingEngineResult } from "./pricing";
 import { calculateFuelSurcharge, type FuelSurchargeResult } from "./fuelSurcharge";
 import { calculateProfitDashboard, type ProfitDashboard } from "./profit";
+import { validateQuoteInputs } from "./validation";
 
 export interface QuoteResult {
   inputs: QuoteInputs;
@@ -22,7 +23,21 @@ export interface QuoteResult {
   quoteExpirationDate: string;
 }
 
-export function buildQuote(inputs: QuoteInputs): QuoteResult {
+export type BuildQuoteResult =
+  | { ok: true; quote: QuoteResult }
+  | { ok: false; issues: string[] };
+
+/** Validates inputs first so a bad number (e.g. 0 truck MPG) can never
+ * silently turn into a NaN/Infinity quote - see validation.ts. */
+export function buildQuote(inputs: QuoteInputs): BuildQuoteResult {
+  const issues = validateQuoteInputs(inputs);
+  if (issues.length > 0) {
+    return { ok: false, issues };
+  }
+  return { ok: true, quote: buildQuoteUnchecked(inputs) };
+}
+
+function buildQuoteUnchecked(inputs: QuoteInputs): QuoteResult {
   const { job, operational, cost } = inputs;
 
   const production = calculateProduction(job, operational);

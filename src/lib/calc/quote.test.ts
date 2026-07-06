@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildQuote } from "./quote";
+import { buildQuote, type QuoteResult } from "./quote";
 import { calculateProduction } from "./production";
 import { calculateFuelSurcharge } from "./fuelSurcharge";
 import type { QuoteInputs } from "./types";
@@ -49,6 +49,16 @@ function baseInputs(): QuoteInputs {
   };
 }
 
+/** Unwraps a successful buildQuote() result, failing the test loudly if
+ * validation rejected the fixture instead of computing a quote. */
+function expectQuote(inputs: QuoteInputs): QuoteResult {
+  const result = buildQuote(inputs);
+  if (!result.ok) {
+    throw new Error(`Expected a valid quote, got issues: ${result.issues.join(", ")}`);
+  }
+  return result.quote;
+}
+
 describe("calculateProduction", () => {
   it("derives cycle time, trips, and fleet hours from job + operational inputs", () => {
     const inputs = baseInputs();
@@ -73,7 +83,7 @@ describe("calculateProduction", () => {
 
 describe("buildQuote - pricing engine", () => {
   it("computes all three methods and recommends the highest sustainable rate", () => {
-    const result = buildQuote(baseInputs());
+    const result = expectQuote(baseInputs());
 
     expect(result.pricing.hourly.total).toBeCloseTo(2761.97, 2);
     expect(result.pricing.mileage.total).toBeCloseTo(2761.97, 2);
@@ -85,7 +95,7 @@ describe("buildQuote - pricing engine", () => {
   });
 
   it("always recommends the highest of the three method totals", () => {
-    const result = buildQuote(baseInputs());
+    const result = expectQuote(baseInputs());
     const { hourly, perTon, mileage, recommended } = result.pricing;
     const max = Math.max(hourly.total, perTon.total, mileage.total);
     expect(recommended.total).toBe(max);
@@ -104,18 +114,18 @@ describe("buildQuote - pricing engine", () => {
     inputs.cost.administrativeOverheadPercent = 1;
     inputs.cost.dispatchFeePercent = 1;
 
-    const result = buildQuote(inputs);
+    const result = expectQuote(inputs);
     expect(result.pricing.hourly.rate).toBe(95);
     expect(result.pricing.hourly.notes.join(" ")).toMatch(/floor applied/);
   });
 
   it("increases the per-ton rate for long-haul jobs beyond the short-haul threshold", () => {
-    const shortHaul = buildQuote(baseInputs());
+    const shortHaul = expectQuote(baseInputs());
 
     const longHaulInputs = baseInputs();
     longHaulInputs.job.oneWayLoadedMiles = 60;
     longHaulInputs.job.roundTripMiles = 120;
-    const longHaul = buildQuote(longHaulInputs);
+    const longHaul = expectQuote(longHaulInputs);
 
     expect(longHaul.pricing.perTon.rate).toBeGreaterThan(shortHaul.pricing.perTon.rate);
   });
@@ -152,7 +162,7 @@ describe("fuel surcharge module", () => {
 
 describe("profit dashboard", () => {
   it("reconciles gross revenue down to gross profit and flags margin correctly", () => {
-    const result = buildQuote(baseInputs());
+    const result = expectQuote(baseInputs());
     const { profit } = result;
 
     expect(profit.grossRevenue).toBeCloseTo(result.subtotal, 6);
@@ -182,7 +192,7 @@ describe("profit dashboard", () => {
     inputs.cost.dispatchFeePercent = 20;
     inputs.cost.administrativeOverheadPercent = 15;
 
-    const result = buildQuote(inputs);
+    const result = expectQuote(inputs);
     expect(result.profit.belowTargetMargin).toBe(true);
   });
 });
@@ -191,7 +201,7 @@ describe("buildQuote - totals and expiration", () => {
   it("applies tax on top of the fuel-surcharged subtotal", () => {
     const inputs = baseInputs();
     inputs.taxRatePercent = 8.25;
-    const result = buildQuote(inputs);
+    const result = expectQuote(inputs);
 
     expect(result.taxAmount).toBeCloseTo(result.subtotal * 0.0825, 6);
     expect(result.totalPrice).toBeCloseTo(result.subtotal + result.taxAmount, 6);
@@ -200,11 +210,38 @@ describe("buildQuote - totals and expiration", () => {
   it("sets an expiration date quoteValidityDays after the issue date", () => {
     const inputs = baseInputs();
     inputs.quoteValidityDays = 7;
-    const result = buildQuote(inputs);
+    const result = expectQuote(inputs);
 
     const issue = new Date(result.quoteIssueDate);
     const expiration = new Date(result.quoteExpirationDate);
     const diffDays = (expiration.getTime() - issue.getTime()) / (1000 * 60 * 60 * 24);
     expect(diffDays).toBe(7);
+  });
+});
+
+describe("buildQuote - input validation", () => {
+  it.each([
+    ["totalTonnage", (i: QuoteInputs) => (i.job.totalTonnage = 0)],
+    ["truckCapacityTons", (i: QuoteInputs) => (i.job.truckCapacityTons = 0)],
+    ["numberOfTrucks", (i: QuoteInputs) => (i.job.numberOfTrucks = 0)],
+    ["roundTripMiles", (i: QuoteInputs) => (i.job.roundTripMiles = 0)],
+    ["estimatedProductionHours", (i: QuoteInputs) => (i.job.estimatedProductionHours = 0)],
+    ["avgTravelSpeedMph", (i: QuoteInputs) => (i.operational.avgTravelSpeedMph = 0)],
+    ["truckMpg", (i: QuoteInputs) => (i.cost.truckMpg = 0)],
+    ["oneWayLoadedMiles negative", (i: QuoteInputs) => (i.job.oneWayLoadedMiles = -1)],
+    ["driverOvertimeThresholdHours negative", (i: QuoteInputs) => (i.operational.driverOvertimeThresholdHours = -1)],
+  ])("rejects a non-positive %s instead of returning a NaN quote", (_label, mutate) => {
+    const inputs = baseInputs();
+    mutate(inputs);
+    const result = buildQuote(inputs);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("accepts the base fixture with no issues", () => {
+    const result = buildQuote(baseInputs());
+    expect(result.ok).toBe(true);
   });
 });

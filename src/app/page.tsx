@@ -1,14 +1,15 @@
-"use client";
-
 import Link from "next/link";
-import { useSyncExternalStore } from "react";
-import { listQuotes, subscribe } from "@/lib/store/storage";
+import { prisma } from "@/lib/db/client";
+import { toTypedQuote } from "@/lib/db/mappers";
 import { formatCurrency, formatDate } from "@/lib/format";
 
-const emptyQuotes: ReturnType<typeof listQuotes> = [];
+// Quotes are written continuously via /api/quotes - never prerender this
+// list statically, or newly saved quotes wouldn't show up until a rebuild.
+export const dynamic = "force-dynamic";
 
-export default function Home() {
-  const quotes = useSyncExternalStore(subscribe, listQuotes, () => emptyQuotes);
+export default async function Home() {
+  const rows = await prisma.quote.findMany({ orderBy: { createdAt: "desc" } });
+  const quotes = rows.map(toTypedQuote);
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
@@ -60,7 +61,7 @@ export default function Home() {
                       {q.inputs.job.pickupLocation} &rarr; {q.inputs.job.deliveryLocation}
                     </td>
                     <td className="px-4 py-3">{formatCurrency(q.result.totalPrice)}</td>
-                    <td className="px-4 py-3">{formatDate(q.createdAt)}</td>
+                    <td className="px-4 py-3">{formatDate(q.createdAt.toISOString())}</td>
                     <td className="px-4 py-3">
                       <Link href={`/quote/${q.id}`} className="text-blue-600 hover:underline dark:text-blue-400">
                         View Quote

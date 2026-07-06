@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+}
+
+model Quote {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+  inputs    Json
+  result    Json
+  dispatch  Dispatch?
+}
+
+model Dispatch {
+  id                  String   @id @default(cuid())
+  quoteId             String   @unique
+  quote               Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  driver              String
+  truck               String
+  startTime           String
+  customerContact     String
+  specialInstructions String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}

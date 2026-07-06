@@ -21,23 +21,31 @@ top of.
 
 ## Getting started
 
+Requires a Postgres database (see "Persistence & auth" below).
+
 ```bash
-npm install
-npm run dev      # http://localhost:3000
-npm test         # runs the calc engine unit tests (vitest)
+npm install                          # also runs `prisma generate` via postinstall
+cp .env.example .env                 # fill in DATABASE_URL, NEXTAUTH_SECRET, NEXTAUTH_URL
+npm run db:migrate                   # applies prisma/migrations against DATABASE_URL
+npm run db:create-user -- you@example.com yourpassword "Your Name"
+npm run dev                          # http://localhost:3000 - log in with the user above
+npm test                             # runs the calc engine unit tests (vitest)
 npm run lint
 npm run build
 ```
 
-- `/` — dashboard listing quotes you've saved (stored in the browser's
-  `localStorage`; there's no backend/database yet).
+Every route requires login (`src/proxy.ts` redirects to `/login` otherwise):
+
+- `/` — dashboard listing saved quotes (Server Component, reads Postgres directly).
 - `/quote` — the Quote Calculator: fill in the four input groups and see the
   Production Calculator, Pricing Engine, Fuel Surcharge Module, and Profit
-  Dashboard update live. "Save & Generate Customer Quote" persists the quote
-  and opens the customer-facing output.
+  Dashboard update live. "Save & Generate Customer Quote" POSTs to
+  `/api/quotes` and opens the customer-facing output.
 - `/quote/[id]` — the printable Customer Quote Output. "Accept & Create
-  Dispatch" turns it into a dispatch order.
+  Dispatch" POSTs to `/api/dispatches` and turns it into a dispatch order.
 - `/dispatch/[id]` — the Carrier Dispatch View for an accepted quote.
+- `/login` — Credentials-based sign-in (email + password). There is no
+  signup UI by design - see "Persistence & auth" below.
 
 ## Architecture
 
@@ -77,7 +85,55 @@ two implementations each:
 
 Wire these into a Next.js route handler (e.g. `src/app/api/diesel-price/route.ts`)
 that the Quote Calculator form can call to prefill the "Current Diesel Price"
-field, rather than calling them directly from client components.
+field, rather than calling them directly from client components. Not built
+yet - deferred to fast-follow, see the roadmap.
+
+## Persistence & auth
+
+Quotes and dispatches live in Postgres via Prisma (`prisma/schema.prisma`:
+`Quote`, `Dispatch`, `User`). `src/lib/db/client.ts` is the Prisma client
+singleton, built on Prisma 7's driver-adapter pattern (`@prisma/adapter-pg`) -
+Prisma 7 no longer reads a `url` from `datasource {}` in `schema.prisma`;
+the CLI's migrate connection comes from `prisma.config.ts` instead, and the
+runtime client requires an explicit adapter. `src/lib/db/mappers.ts` casts
+the `inputs`/`result` JSON columns back to their typed shape at the read
+boundary - they're deliberately kept as JSON rather than fully normalized
+(see the roadmap's reporting/analytics note for when that should change).
+
+Auth is [Auth.js](https://authjs.dev) (NextAuth v5) with a single
+Credentials provider and JWT sessions (`src/auth.ts`) - no OAuth/SSO, no
+roles beyond "logged in or not," by design for a small internal team on a
+tight launch timeline. `src/proxy.ts` (the Next.js 16 file convention that
+replaced `middleware.ts`) redirects any unauthenticated request to
+`/login`. There is intentionally no signup page - bootstrap a dispatcher
+login with:
+
+```bash
+npm run db:create-user -- dispatcher@yourcompany.com theirpassword "Their Name"
+```
+
+`trustHost: true` is set in `src/auth.ts` because Auth.js otherwise throws
+`UntrustedHost` (and silently lets the request through instead of failing
+safe) whenever the request's Host header doesn't match `NEXTAUTH_URL` -
+this matters on Vercel preview deployments, which get a new URL per
+deployment, not just for local testing on a non-default port.
+
+## Deployment
+
+Deploys as a standard Next.js app on Vercel:
+
+1. Provision a Postgres database (Vercel Postgres or Neon both work) and
+   set `DATABASE_URL` in the Vercel project's environment variables.
+2. Set `NEXTAUTH_SECRET` (generate with `openssl rand -base64 32`) and
+   `NEXTAUTH_URL` (your production domain).
+3. Run `npm run db:migrate` once against the production database (or use
+   `prisma migrate deploy` in a release step) before first traffic.
+4. Bootstrap at least one dispatcher login with `npm run db:create-user`.
+
+`.github/workflows/ci.yml` runs lint, typecheck, tests, and a production
+build on every PR - it uses a placeholder `DATABASE_URL` since none of
+those steps need a live database (`prisma generate` only needs the schema
+file, and no page queries Postgres at build time).
 
 ## Pricing engine notes
 
