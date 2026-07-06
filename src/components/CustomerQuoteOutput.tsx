@@ -11,9 +11,16 @@ interface CustomerQuoteOutputProps {
   inputs: QuoteInputs;
   result: QuoteResult;
   hasDispatch: boolean;
+  revisedFromId: string | null;
 }
 
-export function CustomerQuoteOutput({ quoteId, inputs, result, hasDispatch }: CustomerQuoteOutputProps) {
+export function CustomerQuoteOutput({
+  quoteId,
+  inputs,
+  result,
+  hasDispatch,
+  revisedFromId,
+}: CustomerQuoteOutputProps) {
   const router = useRouter();
   const [showDispatchForm, setShowDispatchForm] = useState(false);
   const [driver, setDriver] = useState("");
@@ -56,6 +63,12 @@ export function CustomerQuoteOutput({ quoteId, inputs, result, hasDispatch }: Cu
       <div className="mb-6 flex items-center justify-between print:hidden">
         <h1 className="text-2xl font-semibold tracking-tight">Customer Quote</h1>
         <div className="flex gap-2">
+          <Link
+            href={`/quote?fromId=${quoteId}`}
+            className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            Revise Quote
+          </Link>
           <button
             onClick={() => window.print()}
             className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
@@ -79,6 +92,12 @@ export function CustomerQuoteOutput({ quoteId, inputs, result, hasDispatch }: Cu
           )}
         </div>
       </div>
+
+      {revisedFromId && (
+        <div className="mb-6 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700 print:hidden dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-400">
+          Revision of Quote #{revisedFromId.slice(0, 8).toUpperCase()}.
+        </div>
+      )}
 
       {showDispatchForm && !hasDispatch && (
         <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 print:hidden">

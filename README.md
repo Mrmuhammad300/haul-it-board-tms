@@ -40,10 +40,28 @@ Every route requires login (`src/proxy.ts` redirects to `/login` otherwise):
 - `/quote` — the Quote Calculator: fill in the four input groups and see the
   Production Calculator, Pricing Engine, Fuel Surcharge Module, and Profit
   Dashboard update live. "Save & Generate Customer Quote" POSTs to
-  `/api/quotes` and opens the customer-facing output.
+  `/api/quotes` and opens the customer-facing output. Visiting
+  `/quote?fromId=<id>` pre-fills the form from an existing quote's inputs
+  for revising it (see "Quote revisions" below).
 - `/quote/[id]` — the printable Customer Quote Output. "Accept & Create
   Dispatch" POSTs to `/api/dispatches` and turns it into a dispatch order.
+  "Revise Quote" starts a revision (see below).
+- `/dispatch` — the Dispatch Board: every active dispatch across all
+  quotes, with a scheduled/in-progress/completed status derived from job
+  start date + start time + estimated production hours
+  (`src/lib/dispatchStatus.ts`).
 - `/dispatch/[id]` — the Carrier Dispatch View for an accepted quote.
+
+### Quote revisions
+
+Quotes are immutable once saved - "Revise Quote" never edits a quote in
+place. It links to `/quote?fromId=<id>`, which pre-fills the calculator
+from that quote's `inputs` (fetched via `GET /api/quotes/[id]`) and, on
+save, creates a **new** `Quote` row with `revisedFromId` pointing back to
+the original (`prisma/schema.prisma`'s `Quote.revisedFrom`/`revisions`
+self-relation). The original quote - and any dispatch already created from
+it - is never modified, so an accepted quote's history can't be silently
+rewritten.
 - `/login` — Credentials-based sign-in (email + password). There is no
   signup UI by design - see "Persistence & auth" below.
 

@@ -33,6 +33,7 @@ export default async function CustomerQuoteOutputPage({
       inputs={quote.inputs}
       result={quote.result}
       hasDispatch={row.dispatch !== null}
+      revisedFromId={row.revisedFromId}
     />
   );
 }

@@ -23,6 +23,13 @@ model Quote {
   inputs    Json
   result    Json
   dispatch  Dispatch?
+
+  // Revising a quote creates a new row linked back to the original rather
+  // than mutating it in place, so an accepted quote's history is never
+  // silently rewritten.
+  revisedFromId String?
+  revisedFrom   Quote?   @relation("QuoteRevisions", fields: [revisedFromId], references: [id])
+  revisions     Quote[]  @relation("QuoteRevisions")
 }
 
 model Dispatch {

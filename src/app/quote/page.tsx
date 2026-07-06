@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { buildQuote, DEFAULT_MINIMUM_HOURLY_RATE, type QuoteInputs } from "@/lib/calc";
 import { Section, NumberField, TextField, DateField, RefreshButton } from "@/components/forms";
 import { QuoteResultsPanel } from "@/components/QuoteResultsPanel";
@@ -54,9 +54,35 @@ function defaultInputs(): QuoteInputs {
   };
 }
 
-export default function QuoteCalculatorPage() {
+function QuoteCalculatorForm() {
   const [inputs, setInputs] = useState<QuoteInputs>(defaultInputs());
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromId = searchParams.get("fromId");
+  const [revisedFromId, setRevisedFromId] = useState<string | null>(null);
+  const [loadingRevision, setLoadingRevision] = useState(Boolean(fromId));
+
+  useEffect(() => {
+    if (!fromId) return;
+    let cancelled = false;
+    fetch(`/api/quotes/${fromId}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Failed to load quote"))))
+      .then((data: { inputs: QuoteInputs }) => {
+        if (cancelled) return;
+        setInputs(data.inputs);
+        setRevisedFromId(fromId);
+      })
+      .catch(() => {
+        // Quote to revise couldn't be loaded - fall back to a blank
+        // calculator rather than blocking the page.
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRevision(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fromId]);
 
   const buildResult = useMemo(() => buildQuote(inputs), [inputs]);
   const result = buildResult.ok ? buildResult.quote : null;
@@ -131,7 +157,7 @@ export default function QuoteCalculatorPage() {
       const response = await fetch("/api/quotes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inputs, result }),
+        body: JSON.stringify({ inputs, result, revisedFromId: revisedFromId ?? undefined }),
       });
       if (!response.ok) {
         throw new Error("Failed to save quote");
@@ -150,6 +176,18 @@ export default function QuoteCalculatorPage() {
       <p className="mb-6 text-zinc-600 dark:text-zinc-400">
         Fill in job, operational, and cost details. Results update live below.
       </p>
+
+      {loadingRevision && (
+        <div className="mb-6 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+          Loading quote to revise...
+        </div>
+      )}
+      {revisedFromId && (
+        <div className="mb-6 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-400">
+          Revising Quote #{revisedFromId.slice(0, 8).toUpperCase()} - saving creates a new
+          linked quote; the original is left unchanged.
+        </div>
+      )}
 
       <div className="mb-8 grid grid-cols-1 gap-5">
         <Section title="Customer Information">
@@ -237,5 +275,13 @@ export default function QuoteCalculatorPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function QuoteCalculatorPage() {
+  return (
+    <Suspense>
+      <QuoteCalculatorForm />
+    </Suspense>
   );
 }

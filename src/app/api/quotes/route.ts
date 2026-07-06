@@ -10,7 +10,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const body = (await request.json()) as { inputs: QuoteInputs; result: QuoteResult };
+  const body = (await request.json()) as {
+    inputs: QuoteInputs;
+    result: QuoteResult;
+    revisedFromId?: string;
+  };
   if (!body?.inputs || !body?.result) {
     return NextResponse.json({ error: "Missing inputs or result" }, { status: 400 });
   }
@@ -20,6 +24,7 @@ export async function POST(request: Request) {
       inputs: body.inputs as unknown as Prisma.InputJsonValue,
       result: body.result as unknown as Prisma.InputJsonValue,
       createdBy: session.user.email ?? undefined,
+      revisedFromId: body.revisedFromId ?? undefined,
     },
   });
 
