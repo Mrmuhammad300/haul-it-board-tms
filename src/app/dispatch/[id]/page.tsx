@@ -2,20 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/db/client";
 import { toTypedQuote } from "@/lib/db/mappers";
 import { formatNumber } from "@/lib/format";
+import { formatCompletion } from "@/lib/dispatchStatus";
 import { PrintButton } from "@/components/PrintButton";
-
-function estimatedCompletion(jobStartDate: string, startTime: string, productionHours: number): string {
-  const start = new Date(`${jobStartDate}T${startTime || "07:00"}:00`);
-  if (Number.isNaN(start.getTime())) return "-";
-  const end = new Date(start.getTime() + productionHours * 60 * 60 * 1000);
-  return end.toLocaleString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -90,7 +78,7 @@ export default async function DispatchViewPage({
         <Row label="Number of Loads" value={formatNumber(result.production.tripsRequired, 0)} />
         <Row
           label="Estimated Completion"
-          value={estimatedCompletion(inputs.job.jobStartDate, dispatch.startTime, result.production.totalProductionHours)}
+          value={formatCompletion(inputs.job.jobStartDate, dispatch.startTime, result.production.totalProductionHours)}
         />
         <Row label="Customer Contact" value={dispatch.customerContact || "-"} />
 

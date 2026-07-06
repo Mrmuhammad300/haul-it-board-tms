@@ -44,6 +44,9 @@ export default function RootLayout({
                 <Link href="/quote" className="hover:text-zinc-900 dark:hover:text-zinc-50">
                   New Quote
                 </Link>
+                <Link href="/dispatch" className="hover:text-zinc-900 dark:hover:text-zinc-50">
+                  Dispatch Board
+                </Link>
               </div>
               <UserNav />
             </nav>
