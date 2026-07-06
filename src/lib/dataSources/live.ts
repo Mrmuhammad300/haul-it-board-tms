@@ -77,15 +77,40 @@ export class GoogleMapsRoutingSource implements RoutingSource {
 }
 
 /**
+ * Geocodes a free-text address to coordinates via the Google Geocoding API
+ * (same key as GoogleMapsRoutingSource) - NWS needs "lat,lon", not an address.
+ */
+export async function geocodeAddress(
+  apiKey: string,
+  address: string
+): Promise<{ lat: number; lon: number }> {
+  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+  url.searchParams.set("address", address);
+  url.searchParams.set("key", apiKey);
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error(`Google Geocoding request failed: ${response.status} ${response.statusText}`);
+  }
+  const body = await response.json();
+  const location = body?.results?.[0]?.geometry?.location;
+  if (!location) {
+    throw new Error("Google Geocoding response did not contain a location.");
+  }
+  return { lat: location.lat, lon: location.lng };
+}
+
+/**
  * National Weather Service forecast. Free, no API key, but requires a
- * descriptive User-Agent per NWS API policy.
+ * descriptive User-Agent per NWS API policy. `location` must be
+ * "lat,lon" (e.g. from geocodeAddress) - NWS does not accept addresses.
  */
 export class NwsWeatherDelaySource implements WeatherDelaySource {
   constructor(private readonly userAgent: string) {}
 
   async getWeatherDelayFactor(location: string): Promise<number> {
     const pointsResponse = await fetch(
-      `https://api.weather.gov/points/${encodeURIComponent(location)}`,
+      `https://api.weather.gov/points/${location}`,
       { headers: { "User-Agent": this.userAgent } }
     );
     if (!pointsResponse.ok) {

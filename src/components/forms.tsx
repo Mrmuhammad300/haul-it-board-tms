@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ReactNode } from "react";
 
 export function Section({
@@ -87,6 +88,46 @@ export function NumberField({
         onChange={(e) => onChange(e.target.valueAsNumber)}
       />
     </label>
+  );
+}
+
+/** A small "pull live data" action for a field group - e.g. "Refresh from
+ * EIA". Calls onFetch, which should throw with a user-facing message on
+ * failure; success/failure is reported inline rather than blocking the form. */
+export function RefreshButton({
+  label,
+  onFetch,
+}: {
+  label: string;
+  onFetch: () => Promise<void>;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleClick() {
+    setLoading(true);
+    setError(null);
+    try {
+      await onFetch();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Request failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="col-span-full flex flex-wrap items-center gap-2 text-xs">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={loading}
+        className="rounded-md border border-zinc-300 px-2.5 py-1 font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+      >
+        {loading ? "Fetching..." : label}
+      </button>
+      {error && <span className="text-amber-600 dark:text-amber-400">{error}</span>}
+    </div>
   );
 }
 

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { buildQuote, DEFAULT_MINIMUM_HOURLY_RATE, type QuoteInputs } from "@/lib/calc";
-import { Section, NumberField, TextField, DateField } from "@/components/forms";
+import { Section, NumberField, TextField, DateField, RefreshButton } from "@/components/forms";
 import { QuoteResultsPanel } from "@/components/QuoteResultsPanel";
 
 function defaultInputs(): QuoteInputs {
@@ -88,6 +88,38 @@ export default function QuoteCalculatorPage() {
     setInputs((prev) => ({ ...prev, customer: { ...prev.customer, [key]: value } }));
   }
 
+  async function fetchJson<T>(url: string): Promise<T> {
+    const response = await fetch(url);
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body?.error ?? "Request failed.");
+    }
+    return body as T;
+  }
+
+  async function refreshDieselPrice() {
+    const { price } = await fetchJson<{ price: number }>("/api/diesel-price");
+    update("currentDieselPricePerGallon", price);
+  }
+
+  async function refreshRoute() {
+    const params = new URLSearchParams({
+      pickup: inputs.job.pickupLocation,
+      delivery: inputs.job.deliveryLocation,
+    });
+    const route = await fetchJson<{ oneWayLoadedMiles: number; roundTripMiles: number }>(
+      `/api/route?${params}`
+    );
+    updateJob("oneWayLoadedMiles", route.oneWayLoadedMiles);
+    updateJob("roundTripMiles", route.roundTripMiles);
+  }
+
+  async function refreshWeatherDelay() {
+    const params = new URLSearchParams({ location: inputs.job.pickupLocation });
+    const { factor } = await fetchJson<{ factor: number }>(`/api/weather-delay?${params}`);
+    updateOperational("weatherFactor", factor);
+  }
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -139,6 +171,7 @@ export default function QuoteCalculatorPage() {
           <NumberField label="Estimated Round-Trip Miles" suffix="mi" min={0.01} value={inputs.job.roundTripMiles} onChange={(v) => updateJob("roundTripMiles", v)} />
           <DateField label="Job Start Date" value={inputs.job.jobStartDate} onChange={(v) => updateJob("jobStartDate", v)} />
           <NumberField label="Estimated Production Hours / Day" suffix="hrs" min={0.01} value={inputs.job.estimatedProductionHours} onChange={(v) => updateJob("estimatedProductionHours", v)} />
+          <RefreshButton label="Look up mileage from pickup/delivery (Google Maps)" onFetch={refreshRoute} />
         </Section>
 
         <Section title="Operational Variables">
@@ -149,6 +182,7 @@ export default function QuoteCalculatorPage() {
           <NumberField label="Weather Factor (optional)" suffix="x" step={0.01} min={0.01} value={inputs.operational.weatherFactor ?? 1} onChange={(v) => updateOperational("weatherFactor", v)} />
           <NumberField label="Number of Trips (override, optional)" min={1} value={inputs.operational.numberOfTripsRequired ?? NaN} onChange={(v) => updateOperational("numberOfTripsRequired", Number.isFinite(v) ? v : undefined)} />
           <NumberField label="Driver Overtime Threshold" suffix="hrs/day" min={0} value={inputs.operational.driverOvertimeThresholdHours} onChange={(v) => updateOperational("driverOvertimeThresholdHours", v)} />
+          <RefreshButton label="Refresh weather delay for pickup location (NWS)" onFetch={refreshWeatherDelay} />
         </Section>
 
         <Section title="Cost Variables">
@@ -165,10 +199,11 @@ export default function QuoteCalculatorPage() {
           <NumberField label="Minimum Hourly Rate" suffix="$/hr floor" min={0} value={inputs.cost.minimumHourlyRate ?? DEFAULT_MINIMUM_HOURLY_RATE} onChange={(v) => updateCost("minimumHourlyRate", v)} />
         </Section>
 
-        <Section title="Fuel, Tax & Quote Terms" description="Diesel price would normally be pulled from the EIA weekly average; enter it manually here or wire up a live data source (see README).">
+        <Section title="Fuel, Tax & Quote Terms" description="Diesel price can be pulled from the EIA weekly average if EIA_API_KEY is configured; otherwise enter it manually (see README).">
           <NumberField label="Current Diesel Price" suffix="$/gal" step={0.01} min={0} value={inputs.currentDieselPricePerGallon} onChange={(v) => update("currentDieselPricePerGallon", v)} />
           <NumberField label="Tax Rate" suffix="%" step={0.01} min={0} value={inputs.taxRatePercent ?? 0} onChange={(v) => update("taxRatePercent", v)} />
           <NumberField label="Quote Validity" suffix="days" min={1} value={inputs.quoteValidityDays ?? 14} onChange={(v) => update("quoteValidityDays", v)} />
+          <RefreshButton label="Refresh diesel price (EIA)" onFetch={refreshDieselPrice} />
         </Section>
       </div>
 

@@ -65,28 +65,35 @@ to unit test and to reuse from an API route later:
 `src/lib/dataSources/` defines the "National Data Sources" integration points
 as interfaces (`DieselPriceSource`, `RoutingSource`, `WeatherDelaySource`) with
 two implementations each:
-- `manual.ts` — echoes a dispatcher-entered value. Used today since no API
-  keys are configured in this environment.
+- `manual.ts` — echoes a dispatcher-entered value. Always available as a
+  fallback, and the only thing used when no API keys are configured.
 - `live.ts` — real adapters for the EIA diesel price API, Google Maps
-  Directions, and the National Weather Service. Not wired into the UI by
-  default.
+  Directions/Geocoding, and the National Weather Service.
 
 ### Connecting live data sources
 
-1. **Diesel prices (EIA)**: register a free key at
-   https://www.eia.gov/opendata/register.php, set `EIA_API_KEY`, and call
-   `new EiaDieselPriceSource(process.env.EIA_API_KEY)` from a server-side route
-   handler (never expose the key to the browser).
-2. **Routing (Google Maps)**: enable the Directions API, set
-   `GOOGLE_MAPS_API_KEY`, and use `GoogleMapsRoutingSource` the same way.
-3. **Weather (NWS)**: no key required, but the API requires a descriptive
-   `User-Agent` (e.g. `"dm-logistics-quote-calc (ops@yourcompany.com)"`) —
-   pass it into `NwsWeatherDelaySource`.
+Each is wired behind a server-side route handler so keys never reach the
+browser, with a "Refresh" button in the Quote Calculator form next to the
+corresponding field. With no keys configured, each button shows an inline
+"not configured, enter manually" message rather than breaking the form.
 
-Wire these into a Next.js route handler (e.g. `src/app/api/diesel-price/route.ts`)
-that the Quote Calculator form can call to prefill the "Current Diesel Price"
-field, rather than calling them directly from client components. Not built
-yet - deferred to fast-follow, see the roadmap.
+1. **Diesel prices (EIA)**: register a free key at
+   https://www.eia.gov/opendata/register.php and set `EIA_API_KEY`.
+   `src/app/api/diesel-price/route.ts` calls `EiaDieselPriceSource`; the
+   "Refresh diesel price (EIA)" button fills in "Current Diesel Price".
+2. **Routing (Google Maps)**: enable the Directions API (and Geocoding API -
+   see weather below) and set `GOOGLE_MAPS_API_KEY`.
+   `src/app/api/route/route.ts` calls `GoogleMapsRoutingSource`; the "Look up
+   mileage" button fills in one-way loaded miles and round-trip miles from
+   the pickup/delivery fields.
+3. **Weather (NWS)**: no key required for NWS itself, but it only accepts
+   coordinates, not addresses, so `src/app/api/weather-delay/route.ts` first
+   geocodes the pickup location via Google's Geocoding API (`geocodeAddress`
+   in `live.ts`, same `GOOGLE_MAPS_API_KEY`) before calling
+   `NwsWeatherDelaySource`. Also set `NWS_USER_AGENT` to a descriptive value
+   (e.g. `"dm-logistics-quote-calc (ops@yourcompany.com)"`) per NWS API
+   policy. The "Refresh weather delay (NWS)" button fills in the weather
+   factor.
 
 ## Persistence & auth
 
