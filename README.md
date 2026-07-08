@@ -130,12 +130,21 @@ Credentials provider and JWT sessions (`src/auth.ts`) - no OAuth/SSO, no
 roles beyond "logged in or not," by design for a small internal team on a
 tight launch timeline. `src/proxy.ts` (the Next.js 16 file convention that
 replaced `middleware.ts`) redirects any unauthenticated request to
-`/login`. There is intentionally no signup page - bootstrap a dispatcher
-login with:
+`/login`. There is intentionally no public signup page - bootstrap the
+first login from the CLI:
 
 ```bash
 npm run db:create-user -- dispatcher@yourcompany.com theirpassword "Their Name"
 ```
+
+After that, any logged-in user can add more logins from the app itself at
+`/users` (`src/app/users/page.tsx` + `src/app/api/users/route.ts`) - useful
+for giving access to people you're demoing the platform to without needing
+terminal/database access. There's no admin/role gating on who can add a
+user - anyone with a login can create another - which is fine for a small
+trusted group but is a real interim trade-off, noted here so it's not
+mistaken for real access control. Revisit if a broader auth system
+(the mentioned Supabase migration, or role-based access) gets built later.
 
 `trustHost: true` is set in `src/auth.ts` because Auth.js otherwise throws
 `UntrustedHost` (and silently lets the request through instead of failing

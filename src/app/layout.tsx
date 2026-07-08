@@ -47,6 +47,9 @@ export default function RootLayout({
                 <Link href="/dispatch" className="hover:text-zinc-900 dark:hover:text-zinc-50">
                   Dispatch Board
                 </Link>
+                <Link href="/users" className="hover:text-zinc-900 dark:hover:text-zinc-50">
+                  Users
+                </Link>
               </div>
               <UserNav />
             </nav>
